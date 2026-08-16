@@ -94,18 +94,7 @@ We have comprehensive documentation in the `docs/` folder to help you get starte
 - [🏛️ Architecture Overview](docs/architecture.md) — System design and tech stack
 - [🌿 Branching Strategy](docs/branching-strategy.md) — How we use Git and write commit messages
 
-### 👨‍💻 Role-Specific Developer Guides
 
-Every team member has a specific guide detailing their deliverables, files they own, and code coordination points:
-
-- [Backend Dev A: Request Management](docs/developer-guides/backend-dev-a-request-management.md) (@ange-buhendwa)
-- [Backend Dev B: Workflow & SLA](docs/developer-guides/backend-dev-b-workflow-sla.md) (@fiifi-yawson)
-- [Backend Dev C: Auth & Dashboard](docs/developer-guides/backend-dev-c-auth-dashboard.md) (@alphonse-shema)
-- [QA Engineer](docs/developer-guides/qa-engineer.md) (@zakaria-osman)
-- [Data Engineer](docs/developer-guides/data-engineer.md) (@richard-sarfo)
-- [DevOps Engineer](docs/developer-guides/devops-engineer.md) (@prince-ayiku)
-
----
 
 ## 🛠️ DevOps Features Included
 

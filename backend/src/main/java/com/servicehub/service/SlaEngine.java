@@ -8,7 +8,7 @@ import com.servicehub.repository.ServiceRequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,6 +22,7 @@ import java.util.List;
  * If a request has breached its SLA, it escalates the priority and marks the request as SLA breached.
  */
 
+@Profile("!test")
 @Service
 @RequiredArgsConstructor
 public class SlaEngine {
@@ -39,6 +40,7 @@ public class SlaEngine {
    * For CRITICAL priority, it will also mark as SLA breached and an email notification will be sent to the admin.
    */
   @Scheduled(fixedRateString = "${app.sla.sla-breach-check-interval}")
+  @org.springframework.transaction.annotation.Transactional
   public void trackResponseSla() {
     int page = 0;
     int size = 200;
@@ -54,8 +56,10 @@ public class SlaEngine {
           Priority nextPriority = this.getNextPriority(req.getPriority());
           log.info("SLA breached for request id {}. Escalating priority from {} to {}", req.getId(), req.getPriority(), nextPriority);
 
-          // Send email notification to admin if SLA breached and priority is CRITICAL
-          emailService.sendSlaNotification(req.getStatus(), ServiceRequestResponse.toResponse(req));
+          // Send email notification to admin if SLA breached and priority is CRITICAL / If not yet breached, send notification about SLA breach
+          if(!req.getSlaBreached()){
+            emailService.sendSlaNotification(req.getStatus(), ServiceRequestResponse.toResponse(req));
+          }
 
           // Update priority and SLA deadlines based on new priority
           req.setPriority(nextPriority);
@@ -99,8 +103,10 @@ public class SlaEngine {
          Priority nextPriority = this.getNextPriority(req.getPriority());
          log.info("Resolution SLA breached for request id {}. Escalating priority from {} to {}", req.getId(), req.getPriority(), nextPriority);
 
-            // Send email notification to admin if SLA breached and priority is CRITICAL
-         emailService.sendSlaNotification(req.getStatus(), ServiceRequestResponse.toResponse(req));
+          // Send email notification to admin if SLA breached and priority is CRITICAL / If not yet breached, send notification about SLA breach
+          if(!req.getSlaBreached()){
+            emailService.sendSlaNotification(req.getStatus(), ServiceRequestResponse.toResponse(req));
+          }
 
          // Update priority and SLA deadlines based on new priority
           req.setResolutionSlaDeadline(slaPolicyService.getResolutionSlaDeadline(req.getCategory(), nextPriority));
@@ -121,7 +127,7 @@ public class SlaEngine {
     return switch (current) {
       case LOW -> Priority.MEDIUM;
       case MEDIUM -> Priority.HIGH;
-      case HIGH -> Priority.HIGH; // No escalation beyond HIGH
+      case HIGH -> Priority.CRITICAL; // No escalation beyond HIGH
       case CRITICAL -> Priority.CRITICAL;  // Alert Admin by email
     };
   }

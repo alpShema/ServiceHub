@@ -51,4 +51,26 @@ public class ServiceRequestViewController {
             return "redirect:/user/tickets#new";
         }
     }
+            @ModelAttribute ServiceRequestDto dto,
+            @AuthenticationPrincipal User user,
+            RedirectAttributes redirectAttributes) {
+        try {
+            if (dto.getDepartmentId() != null) {
+                var dept = adminService.getDepartmentById(dto.getDepartmentId());
+                dto.setCategory(dept.getCategory().name());
+            } else if (dto.getCategory() == null && user.getDepartment() != null) {
+                // Default to user's department if nothing specified
+                dto.setDepartmentId(user.getDepartment().getId());
+                dto.setCategory(user.getDepartment().getCategory().name());
+            }
+
+            requestService.createRequest(dto, user);
+            redirectAttributes.addAttribute("success", "Request submitted successfully!");
+            return "redirect:/user/tickets";
+        } catch (RuntimeException ex) {
+            redirectAttributes.addAttribute("error", ex.getMessage());
+            return "redirect:/user/tickets#new";
+        }
+    }
+
 }

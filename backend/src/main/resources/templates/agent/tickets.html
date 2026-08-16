@@ -196,6 +196,61 @@
                 <input type="text" id="searchInput" placeholder="Search tickets..." oninput="applyFilters()"/>
             </div>
             <select class="flt" id="priorityFilter" onchange="applyFilters()">
+    <th:block th:replace="~{fragments/layout :: styles}"></th:block>
+</head>
+<body>
+
+<th:block th:replace="~{fragments/layout :: sidebar}"></th:block>
+
+<main class="main">
+    <header th:replace="~{fragments/layout :: topbar('My Queue', 'Manage and resolve assigned tickets')}"></header>
+
+    <div class="content">
+        <div class="stats" style="margin-bottom:20px;">
+            <div class="stat-card active" onclick="filterStatus('all',this)" style="cursor:pointer;">
+                <div class="stat-icon ic-blue"><i class="bi bi-ticket-detailed"></i></div>
+                <div style="min-width:0;">
+                    <div class="stat-val" th:text="${tickets != null ? tickets.size() : 0}">0</div>
+                    <div class="stat-lbl">All Tickets</div>
+                </div>
+            </div>
+            <div class="stat-card" onclick="filterStatus('ASSIGNED',this)" style="cursor:pointer;">
+                <div class="stat-icon ic-teal"><i class="bi bi-person-check"></i></div>
+                <div style="min-width:0;">
+                    <div class="stat-val" th:text="${assignedCount ?: 0}">0</div>
+                    <div class="stat-lbl">Assigned</div>
+                </div>
+            </div>
+            <div class="stat-card" onclick="filterStatus('UNASSIGNED',this)" style="cursor:pointer;">
+                <div class="stat-icon ic-amber"><i class="bi bi-inbox"></i></div>
+                <div style="min-width:0;">
+                    <div class="stat-val" th:text="${unassignedCount ?: 0}">0</div>
+                    <div class="stat-lbl">Unassigned</div>
+                </div>
+            </div>
+            <div class="stat-card" onclick="filterStatus('SLA_BREACH',this)" style="cursor:pointer;">
+                <div class="stat-icon ic-red"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <div style="min-width:0;">
+                    <div class="stat-val" th:text="${slaBreachCount ?: 0}">0</div>
+                    <div class="stat-lbl">SLA Breach</div>
+                </div>
+            </div>
+            <div class="stat-card" onclick="filterStatus('RESOLVED',this)" style="cursor:pointer;">
+                <div class="stat-icon ic-green"><i class="bi bi-check-circle-fill"></i></div>
+                <div style="min-width:0;">
+                    <div class="stat-val" th:text="${resolvedCount ?: 0}">0</div>
+                    <div class="stat-lbl">Resolved</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOOLBAR -->
+        <div class="toolbar">
+            <div class="search-wrap">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" placeholder="Search tickets..." oninput="search(this.value)"/>
+            </div>
+            <select class="filter" onchange="filterPriority(this.value)">
                 <option value="">All Priorities</option>
                 <option value="CRITICAL">Critical</option>
                 <option value="HIGH">High</option>
@@ -409,6 +464,156 @@
 
     function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('show'); }
     function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('show'); }
+        <!-- TABLE -->
+        <div class="panel">
+            <div class="ph">
+                <div class="pt"><i class="bi bi-ticket-detailed"></i> Tickets</div>
+                <span class="tc" id="ticketCount" th:text="${tickets != null ? tickets.size() + ' tickets' : '0 tickets'}">0 tickets</span>
+            </div>
+            <div class="tbl-wrap">
+                <table id="ticketTable">
+                    <thead>
+                    <tr>
+                        <th>#ID</th>
+                        <th>Title</th>
+                        <th>Requester</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>SLA</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody id="ticketBody">
+                    <tr th:each="t : ${tickets}"
+                        th:data-id="${t.id}"
+                        th:data-status="${t.status}"
+                        th:data-priority="${t.priority}"
+                        th:data-title="${t.title}"
+                        th:data-sla-breached="${t.slaBreached}"
+                        th:data-assigned="${t.assignedToName != null ? 'true' : 'false'}">
+                        <td class="t-id"><a th:href="@{/requests/{id}(id=${t.id})}" style="color:var(--teal);font-weight:600;text-decoration:none;" th:text="'#' + ${t.id}">#1</a></td>
+                        <td class="t-title"><a th:href="@{/requests/{id}(id=${t.id})}" style="color:inherit;text-decoration:none;" th:text="${t.title}">Title</a></td>
+                        <td>
+                            <div class="t-req">
+                                <div class="t-av2" th:text="${t.requesterName != null and t.requesterName.length() >= 2 ? t.requesterName.substring(0,2).toUpperCase() : '??'}">NA</div>
+                                <span style="font-size:11.5px;" th:text="${t.requesterName ?: 'Unknown'}">User</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="pill"
+                                  th:classappend="${t.status=='OPEN'}?'p-open':(${t.status=='IN_PROGRESS'}?'p-prog':'p-done')"
+                                  th:text="${t.status.replace('_',' ')}">OPEN</span>
+                        </td>
+                        <td>
+                            <span class="pill"
+                                  th:classappend="${t.priority=='HIGH' or t.priority=='CRITICAL'}?'p-hi':(${t.priority=='MEDIUM'}?'p-med':'p-lo')"
+                                  th:text="${t.priority}">MED</span>
+                        </td>
+                        <td>
+                            <span th:if="${t.slaBreached}" class="sla-breach"><i class="bi bi-exclamation-triangle-fill"></i> Breached</span>
+                            <span th:if="${!t.slaBreached and t.resolutionSlaDeadline!=null}" class="sla-ok"><i class="bi bi-check-circle"></i> On track</span>
+                            <span th:if="${!t.slaBreached and t.resolutionSlaDeadline==null}" style="color:var(--muted);font-size:11px;">—</span>
+                        </td>
+                        <td class="t-date" th:text="${t.createdAt != null ? #temporals.format(t.createdAt,'MMM dd, yyyy') : ''}">Mar 11</td>
+                        <td>
+                            <div class="act-group">
+                                <button class="act-btn btn-assign"
+                                        th:if="${t.assignedToName == null}"
+                                        th:data-id="${t.id}"
+                                        onclick="handleAssignMe(this)"><i class="bi bi-person-plus"></i> Assign Me</button>
+                                <button class="act-btn btn-start"
+                                        th:if="${t.status == 'ASSIGNED'}"
+                                        th:data-id="${t.id}"
+                                        data-status="IN_PROGRESS"
+                                        onclick="handleUpdateStatus(this)"><i class="bi bi-play-fill"></i> Start</button>
+                                <button class="act-btn btn-resolve"
+                                        th:if="${t.status == 'IN_PROGRESS'}"
+                                        th:data-id="${t.id}"
+                                        data-status="RESOLVED"
+                                        onclick="handleUpdateStatus(this)"><i class="bi bi-check-lg"></i> Resolve</button>
+                                <button class="act-btn btn-close-ticket"
+                                        th:if="${t.status != 'CLOSED' and t.status != 'RESOLVED'}"
+                                        th:data-id="${t.id}"
+                                        data-status="CLOSED"
+                                        onclick="handleUpdateStatus(this)"><i class="bi bi-x-lg"></i> Close</button>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="empty" th:if="${tickets==null or tickets.empty}">
+                <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                No tickets found
+            </div>
+            
+            <!-- PAGINATION -->
+            <div class="pagination" th:if="${totalPages > 1}">
+                <button class="page-btn" th:disabled="${currentPage == 0}" 
+                        th:onclick="'window.location.href=\'/agent/tickets?page=' + ${currentPage - 1} + '\''">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <span class="page-info">Page <span th:text="${currentPage + 1}">1</span> of <span th:text="${totalPages}">1</span></span>
+                <button class="page-btn" th:disabled="${currentPage >= totalPages - 1}" 
+                        th:onclick="'window.location.href=\'/agent/tickets?page=' + ${currentPage + 1} + '\''">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+
+<script>
+    let activeStatus='all', activePriority='', activeSearch='';
+
+    function applyFilters(){
+        const rows=document.querySelectorAll('#ticketBody tr');
+        let visible=0;
+        rows.forEach(row=>{
+            const s=row.dataset.status, p=row.dataset.priority, t=row.dataset.title?.toLowerCase()||'';
+            const sla=row.dataset.slaBreached, assigned=row.dataset.assigned;
+            let show=true;
+            if(activeStatus!=='all'){
+                if(activeStatus==='ASSIGNED')show=assigned==='true';
+                else if(activeStatus==='UNASSIGNED')show=assigned==='false';
+                else if(activeStatus==='SLA_BREACH')show=sla==='true';
+                else show=s===activeStatus;
+            }
+            if(show&&activePriority)show=p===activePriority;
+            if(show&&activeSearch)show=t.includes(activeSearch);
+            row.style.display=show?'':'none';
+            if(show) visible++;
+        });
+        document.getElementById('ticketCount').textContent=visible+' tickets';
+    }
+    function filterStatus(s,btn){
+        activeStatus=s;
+        document.querySelectorAll('.stat-card').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+    }
+    function filterPriority(p){activePriority=p;applyFilters();}
+    function search(v){activeSearch=v.toLowerCase();applyFilters();}
+
+    function handleUpdateStatus(btn) {
+        const id=btn.dataset.id, status=btn.dataset.status;
+        const labels={IN_PROGRESS:'start working on',RESOLVED:'resolve',CLOSED:'close'};
+        if(!confirm(`${labels[status]||status} ticket #${id}?`)) return;
+        fetch(`/api/requests/${id}/status`,{
+            method:'PUT',credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({newStatus:status})
+        }).then(r=>{if(r.ok)location.reload();else alert('Failed');});
+    }
+    function handleAssignMe(btn){
+        const id=btn.dataset.id;
+        if(!confirm('Assign this ticket to yourself?'))return;
+        fetch(`/api/requests/${id}/assign`,{method:'PUT',credentials:'same-origin'})
+            .then(r=>{if(r.ok)location.reload();else alert('Failed');});
+    }
 </script>
 </body>
 </html>
