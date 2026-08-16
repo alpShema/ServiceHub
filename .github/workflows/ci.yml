@@ -15,14 +15,14 @@
 name: CI/CD Pipeline
 
 on:
-    push:
-        branches: [develop]
-    pull_request:
-        branches: [develop]
+  push:
+    branches: [develop, feature/servicehub-updates]
+  pull_request:
+    branches: [develop]
 
 concurrency:
-    group: ci-${{ github.ref }}
-    cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
     # ===========================================================================
@@ -166,102 +166,90 @@ jobs:
 
             - name: Build backend Docker image
               run: docker build -t servicehub-backend:${{ github.sha }} ./backend
+permissions:
+  contents: read
+  pull-requests: read
 
-            - name: Save Docker image
-              run: docker save servicehub-backend:${{ github.sha }} > backend-image.tar
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      dataeng: ${{ steps.filter.outputs.dataeng }}
+      devops: ${{ steps.filter.outputs.devops }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/**'
+              - 'docker-compose*.yml'
+            dataeng:
+              - 'data-engineering/**'
+            devops:
+              - 'devops/**'
+              - 'docker-compose*.yml'
 
-            - name: Upload image artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: backend-image
-                  path: backend-image.tar
-                  retention-days: 1
+  lint-test-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/_reusable-lint-test-backend.yml
 
-    # ===========================================================================
-    # Stage 3: Security Scans & Integration Testing
-    # ===========================================================================
-    security-scan:
-        name: Security Scan
-        runs-on: ubuntu-latest
-        needs: [build-images]
-        steps:
-            - name: Download image artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: backend-image
+  lint-data-engineering:
+    needs: changes
+    if: needs.changes.outputs.dataeng == 'true'
+    uses: ./.github/workflows/_reusable-lint-data-engineering.yml
 
-            - name: Load Docker image
-              run: docker load < backend-image.tar
+  lint-devops:
+    needs: changes
+    if: needs.changes.outputs.devops == 'true'
+    uses: ./.github/workflows/_reusable-lint-devops.yml
 
-            - name: Run Trivy vulnerability scanner
-              uses: aquasecurity/trivy-action@master
-              with:
-                  image-ref: "servicehub-backend:${{ github.sha }}"
-                  format: "table"
-                  exit-code: "0"
-                  ignore-unfixed: true
-                  vuln-type: "os,library"
-                  severity: "CRITICAL,HIGH"
+  build-images:
+    name: Build backend image
+    needs:
+      - lint-test-backend
+      - lint-data-engineering
+      - lint-devops
+    uses: ./.github/workflows/_reusable-build-backend-image.yml
+    with:
+      image-name: servicehub-backend
 
-    integration-test:
-        name: Integration Test
-        runs-on: ubuntu-latest
-        needs: [build-images]
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  security-scans:
+    name: Security scans
+    needs: build-images
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/_reusable-security-scans.yml
+    with:
+      image-name: ${{ needs.build-images.outputs.image_name }}
+      image-tag: ${{ needs.build-images.outputs.image_tag }}
 
-            - name: Download image artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: backend-image
+  integration-test:
+    name: Integration smoke test
+    needs: build-images
+    uses: ./.github/workflows/_reusable-integration-smoke.yml
+    with:
+      image-name: ${{ needs.build-images.outputs.image_name }}
+      image-tag: ${{ needs.build-images.outputs.image_tag }}
+    secrets: inherit # pragma: allowlist secret
 
-            - name: Load Docker image
-              run: docker load < backend-image.tar
-
-            - name: Setup PostgreSQL service
-              run: |
-                  docker network create servicehub-network
-                  docker run -d \
-                    --network servicehub-network \
-                    --name postgres \
-                    -e POSTGRES_DB=servicehub \
-                    -e POSTGRES_USER=servicehub \
-                    -e POSTGRES_PASSWORD=servicehub_pass \
-                    -p 5432:5432 \
-                    postgres:16-alpine
-                  sleep 5 # Wait for DB initialization
-
-            - name: Run integration tests
-              run: |
-                  echo "Spinning up loaded Docker image against temporary PostgreSQL container..."
-                  docker run -d \
-                    --network servicehub-network \
-                    --name backend-integration \
-                    -p 8080:8080 \
-                    -e SPRING_PROFILES_ACTIVE=test \
-                    -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/servicehub \
-                    -e SPRING_DATASOURCE_USERNAME=servicehub \
-                    -e SPRING_DATASOURCE_PASSWORD=servicehub_pass \
-                    -e JWT_SECRET=testsecret123 \
-                    servicehub-backend:${{ github.sha }}
-
-                  echo "Waiting 20 seconds for Spring Boot & Hibernate to actuate..."
-                  sleep 20
-
-                  echo "Checking actuator health endpoint..."
-                  curl -f http://localhost:8080/actuator/health || exit 1
-
-                  echo "Integration test check passed!"
-
-    # ===========================================================================
-    # Stage 4: Push to Container Registry
-    # ===========================================================================
-    push-ecr:
-        name: Push Images to ECR
-        runs-on: ubuntu-latest
-        needs: [security-scan, integration-test]
-        if: false # Skipped for now per requirements
-        steps:
-            - name: Placeholder
-              run: echo "Push to ECR is disabled for the develop branch until further notice."
+  publish-ecr:
+    name: Publish to ECR
+    needs:
+      - build-images
+      - integration-test
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/_reusable-publish-ecr.yml
+    with:
+      image-name: ${{ needs.build-images.outputs.image_name }}
+      image-tag: ${{ needs.build-images.outputs.image_tag }}
+    secrets: inherit # pragma: allowlist secret

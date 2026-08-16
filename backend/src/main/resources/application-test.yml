@@ -12,10 +12,14 @@
 # =============================================================================
 
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+      - org.springframework.boot.autoconfigure.mail.MailSenderValidatorAutoConfiguration
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/servicehub_test}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -28,3 +32,10 @@ logging:
   level:
     root: WARN
     com.servicehub: INFO
+
+app:
+  sla:
+    sla-breach-notification:
+      enabled: false
+      admin-email: ${SPRING_EMAIL_ADMIN_ADDRES:test@mail.com}
+    sla-breach-check-interval: ${SLA_BREACH_CHECK_INTERVAL:900000}

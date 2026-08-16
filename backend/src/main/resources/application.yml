@@ -14,39 +14,52 @@
 spring:
   application:
     name: servicehub
-
-  # --- Database ---
-  # Default connection for local development.
-  # Overridden by SPRING_DATASOURCE_* env vars in Docker Compose.
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/servicehub}
-    username: ${SPRING_DATASOURCE_USERNAME:servicehub}
-    password: ${SPRING_DATASOURCE_PASSWORD:servicehub_pass}
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:h2:mem:tempdb;MODE=PostgreSQL
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      pool-name: sh-db-pool
+      validation-timeout: 5000
+      leak-detection-threshold: 20000
+      connection-test-query: SELECT 1
 
-  # --- JPA / Hibernate ---
   jpa:
-    defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
 
-  # --- Data Initialization ---
-  # Seed data (data.sql) is loaded on startup.
-  # Set to "never" in production if using Flyway/Liquibase.
-  sql:
-    init:
-      mode: always
 
   # --- Thymeleaf Template Engine ---
   thymeleaf:
     prefix: classpath:/templates/
     suffix: .html
     cache: false
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
+  mail:
+    host: ${SPRING_EMAIL_HOST}
+    port: ${SPRING_EMAIL_PORT}
+    username: ${SPRING_EMAIL_USERNAME}
+    password: ${SPRING_EMAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 # =============================================================================
 # Server Configuration
@@ -68,9 +81,7 @@ jwt:
 # =============================================================================
 springdoc:
   api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
+    enabled: true
 
 # =============================================================================
 # Actuator & Monitoring
@@ -88,6 +99,31 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+# =============================================================================
+# Application Properties
+# =============================================================================
+# Default values for application-specific properties. Override in profile-specific configs or via environment variables.
+app:
+  accounts:
+    admin:
+      email: admin@amalitech.com
+      password: password123
+
+    user:
+      email: user@amalitech.com
+      password: password123
+
+    agent:
+      email: agent@amalitech.com
+      password: password123
+  sla:
+    sla-breach-notification:
+      enabled: false
+      admin-email: ${SPRING_EMAIL_ADMIN_ADDRESS}
+    sla-breach-check-interval: ${SLA_BREACH_CHECK_INTERVAL:900000} # 15 minutes in milliseconds
+
+
 
 # =============================================================================
 # Logging
