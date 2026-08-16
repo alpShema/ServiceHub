@@ -24,6 +24,148 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+jobs:
+    # ===========================================================================
+    # Stage 1: Linting, Testing, and Secrets Check
+    # ===========================================================================
+    lint-test-backend:
+        name: Lint & Test (backend) - JDK ${{ matrix.java }}
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                java: ["17", "21"]
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up JDK ${{ matrix.java }}
+              uses: actions/setup-java@v4
+              with:
+                  java-version: ${{ matrix.java }}
+                  distribution: "temurin"
+
+            - name: Cache Maven packages
+              uses: actions/cache@v4
+              with:
+                  path: ~/.m2/repository
+                  key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+                  restore-keys: ${{ runner.os }}-maven-
+
+            - name: Build and Test backend
+              working-directory: ./backend
+              run: mvn clean test -B
+
+    lint-data-engineering:
+        name: Lint (data-engineering)
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+            - name: Install Flake8
+              run: pip install flake8
+            - name: Run Flake8
+              working-directory: ./data-engineering
+              run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    lint-devops:
+        name: Lint (devops)
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: Run yamllint
+              working-directory: ./devops
+              run: |
+                  sudo apt-get install -y yamllint
+                  yamllint . -d "{extends: relaxed, rules: {line-length: disable}}"
+
+    lint-qa:
+        name: Lint (qa)
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            - name: QA Linting Placeholder
+              run: echo "Depending on the QA framework (Selenium, Cypress, etc.), insert the linter here."
+
+    gitleaks:
+        name: GitLeaks Scan
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # needed for gitleaks
+            - name: Run Gitleaks
+              uses: gitleaks/gitleaks-action@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    sast-scan:
+        name: Static Code Security Scan (CodeQL)
+        runs-on: ubuntu-latest
+        permissions:
+            security-events: write
+            actions: read
+            contents: read
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: "java"
+
+            - name: Set up JDK 17
+              uses: actions/setup-java@v4
+              with:
+                  java-version: "17"
+                  distribution: "temurin"
+
+            - name: Build backend for CodeQL
+              working-directory: ./backend
+              run: mvn clean compile -B
+
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@v3
+              with:
+                  category: "/language:java"
+                  upload: never # Skip GHAS upload (fixes permission error on private repos)
+
+            - name: Upload CodeQL Results as Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: codeql-results
+                  path: ../results/**/*.sarif
+                  retention-days: 7
+
+    # ===========================================================================
+    # Stage 2: Build Images
+    # ===========================================================================
+    build-images:
+        name: Build Images
+        runs-on: ubuntu-latest
+        needs:
+            [
+                lint-test-backend,
+                lint-data-engineering,
+                lint-devops,
+                lint-qa,
+                gitleaks,
+                sast-scan,
+            ]
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Build backend Docker image
+              run: docker build -t servicehub-backend:${{ github.sha }} ./backend
 permissions:
   contents: read
   pull-requests: read
