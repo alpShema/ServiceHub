@@ -38,6 +38,9 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     // Unassigned — no agent yet
     List<ServiceRequest> findByAssignedToIsNull();
+
+    // SLA breached
+    List<ServiceRequest> findBySlaBreachedTrue();
     List<ServiceRequest> findByDepartmentAndAssignedToIsNull(com.servicehub.model.Department department);
     List<ServiceRequest> findByDepartmentAndAssignedToIsNullAndStatus(com.servicehub.model.Department department, RequestStatus status);
 

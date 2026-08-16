@@ -57,6 +57,11 @@ public class ServiceRequestService {
                 .orElseThrow(() -> new RuntimeException("Request not found")));
     }
 
+    public ServiceRequest getRequestEntityById(Long id) {
+        return requestRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Request not found"));
+    }
+
     /**
      * Returns the raw ServiceRequest entity by ID.
      * Used where direct entity access is needed (e.g. permission checks in ViewController).
@@ -102,6 +107,11 @@ public class ServiceRequestService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
+
+        if (dto.getDepartmentId() != null) {
+            req.setDepartment(departmentRepository.findById(dto.getDepartmentId())
+                    .orElse(null));
+        }
 
         req.setResponseSlaDeadline(slaPolicyService.getResponseSlaDeadline(req.getCategory(), req.getPriority()));
         req.setResolutionSlaDeadline(slaPolicyService.getResolutionSlaDeadline(req.getCategory(), req.getPriority()));
@@ -263,6 +273,8 @@ public class ServiceRequestService {
                 throw new InvalidServiceRequestTransition(current, newStatus);
         }
     }
+    // ── USER ──────────────────────────────────────────────────────────────────
+
     /**
      * Returns open and active requests for a specific user.
      * Includes tickets with status OPEN, ASSIGNED, or IN_PROGRESS.
@@ -278,6 +290,7 @@ public class ServiceRequestService {
                 List.of(RequestStatus.OPEN, RequestStatus.IN_PROGRESS, RequestStatus.ASSIGNED)
         );
     }
+
     /**
      * Returns resolved and closed requests for a specific user.
      * Includes tickets with status RESOLVED or CLOSED.
@@ -294,11 +307,15 @@ public class ServiceRequestService {
         );
     }
 
+// ── ADMIN ─────────────────────────────────────────────────────────────────
+
 
     @Transactional
     public List<ServiceRequest> getAllRequests() {
         return requestRepository.findAll();
     }
+
+// ── AGENT ─────────────────────────────────────────────────────────────────
 
     /**
      * Returns all service requests currently assigned to a specific agent.

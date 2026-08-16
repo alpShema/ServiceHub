@@ -24,7 +24,10 @@ public class ProfileController {
     @GetMapping
     public String view(@AuthenticationPrincipal User user, Model model) {
         model.addAttribute("user", user);
+
+
         model.addAttribute("activePage", "profile");
+
         return "profile/view";
     }
 
@@ -41,6 +44,15 @@ public class ProfileController {
 
             if (newPassword != null && !newPassword.isBlank()) {
                 if (currentPassword == null || currentPassword.isBlank()) {
+                    redirectAttributes.addFlashAttribute("error", "Current password is required to change password.");
+                    return "redirect:/profile";
+                }
+                if (!passwordEncoder.matches(currentPassword, entity.getPassword())) {
+                    redirectAttributes.addFlashAttribute("error", "Current password is incorrect.");
+                    return "redirect:/profile";
+                }
+                if (newPassword.length() < 6) {
+                    redirectAttributes.addFlashAttribute("error", "New password must be at least 6 characters.")
                     redirectAttributes.addAttribute("error", "Current password is required to change password.");
                     return "redirect:/profile";
                 }
@@ -50,12 +62,18 @@ public class ProfileController {
                 }
                 if (newPassword.length() < 6) {
                     redirectAttributes.addAttribute("error", "New password must be at least 6 characters.");
+
                     return "redirect:/profile";
                 }
                 entity.setPassword(passwordEncoder.encode(newPassword));
             }
 
             userRepository.save(entity);
+
+            redirectAttributes.addFlashAttribute("success", "Profile updated successfully.");
+        } catch (Exception ex) {
+            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+
             redirectAttributes.addAttribute("success", "Profile updated successfully.");
         } catch (Exception ex) {
             redirectAttributes.addAttribute("error", ex.getMessage());

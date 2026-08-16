@@ -23,6 +23,7 @@ public class ServiceRequestDto {
     @NotNull
     @NotBlank(message = "Priority is required")
     private String priority;
+    /** Optional: when provided, department is set on the request and category can be derived from it */
     /**
      * Optional: when provided, department is set on the request
      * and category can be derived from it.

@@ -31,6 +31,10 @@ public class ViewController {
     private final ServiceRequestService requestService;
     private final AdminService adminService;
 
+    // ── INDEX → redirect to login ──────────────────────────────────────────
+    @GetMapping("/")
+    public String index() {
+        return "redirect:/auth/login";
     private static final String USER_ATTR = "user";
     private static final String DEPARTMENTS_ATTR = "departments";
     private static final String TICKETS_ATTR = "tickets";
@@ -56,6 +60,18 @@ public class ViewController {
     public String adminHome(@AuthenticationPrincipal User user, Model model) {
         model.addAttribute(USER_ATTR, user);
         model.addAttribute("users", adminService.getAllUsers());
+        model.addAttribute("departments", adminService.getAllDepartments());
+        model.addAttribute("stats", dashboardService.getDashboardStats());
+        return "admin/home";
+    }
+
+    /** Admin analytics — charts, SLA, trends */
+    @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('ADMIN')")
+    public String adminAnalytics(Model model) {
+        model.addAttribute("stats", dashboardService.getDashboardStats());
+        model.addAttribute("trends", dashboardService.getTrends(7));
+        return "dashboard";
         model.addAttribute(DEPARTMENTS_ATTR, adminService.getAllDepartments());
         var stats = dashboardService.getDashboardStats();
         model.addAttribute(STATS_ATTR, stats);
@@ -82,6 +98,9 @@ public class ViewController {
     /** Admin — all tickets */
     @GetMapping("/admin/tickets")
     @PreAuthorize("hasRole('ADMIN')")
+    public String adminTickets(Model model) {
+        model.addAttribute("tickets", requestService.getAllRequests());
+        model.addAttribute("departments", adminService.getAllDepartments());
     public String adminTickets(@AuthenticationPrincipal User user,
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "10") int size,
@@ -118,6 +137,12 @@ public class ViewController {
     }
 
 
+    /** Admin — user management */
+    @GetMapping("/admin/users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public String adminUsers(Model model) {
+        model.addAttribute("users", adminService.getAllUsers());
+        model.addAttribute("departments", adminService.getAllDepartments());
     @GetMapping("/admin/users")
     @PreAuthorize("hasRole('ADMIN')")
     public String adminUsers(@AuthenticationPrincipal User user, Model model) {
@@ -155,6 +180,12 @@ public class ViewController {
     @GetMapping("/agent/dashboard")
     @PreAuthorize("hasRole('AGENT')")
     public String agentDashboard(@AuthenticationPrincipal User user, Model model) {
+        model.addAttribute("user", user);
+        model.addAttribute("assignedTickets", requestService.getAssignedRequests(user));
+        model.addAttribute("unassignedTickets", requestService.getUnassignedRequests());
+        model.addAttribute("slaBreaches", requestService.getSlaBreachedRequests());
+        model.addAttribute("slaWarnings", requestService.getSlaWarningRequests());
+        return "/agent/agent-dashboard";
         model.addAttribute(USER_ATTR, user);
         List<ServiceRequestResponse> assigned = requestService.getAssignedRequests(user).stream()
                 .map(ServiceRequestResponse::toResponse).toList();
@@ -179,6 +210,10 @@ public class ViewController {
     /** Agent — ticket list (assigned + unassigned queue) */
     @GetMapping("/agent/tickets")
     @PreAuthorize("hasRole('AGENT')")
+    public String agentTickets(@AuthenticationPrincipal User user, Model model) {
+        model.addAttribute("user", user);
+        model.addAttribute("tickets", requestService.getAssignedRequests(user));
+        model.addAttribute("unassignedTickets", requestService.getUnassignedRequests());
     public String agentTickets(@AuthenticationPrincipal User user,
                                 @RequestParam(defaultValue = "0") int page,
                                 @RequestParam(defaultValue = "10") int size,
@@ -232,6 +267,10 @@ public class ViewController {
     @GetMapping("/user/dashboard")
     @PreAuthorize("hasRole('USER')")
     public String userDashboard(@AuthenticationPrincipal User user, Model model) {
+        model.addAttribute("user", user);
+        model.addAttribute("openRequests", requestService.getOpenRequestsForUser(user));
+        model.addAttribute("resolvedRequests", requestService.getResolvedRequestsForUser(user));
+        return "/users/user-dashboard";
         model.addAttribute(USER_ATTR, user);
         model.addAttribute("openRequests", requestService.getOpenRequestsForUser(user));
         model.addAttribute("resolvedRequests", requestService.getResolvedRequestsForUser(user));
@@ -242,6 +281,13 @@ public class ViewController {
     /** User — my tickets + submit new */
     @GetMapping("/user/tickets")
     @PreAuthorize("hasRole('USER')")
+    public String userTickets(@AuthenticationPrincipal User user, Model model) {
+        model.addAttribute("user", user);
+        model.addAttribute("tickets", requestService.getRequestsForUser(user));
+        model.addAttribute("departments", adminService.getAllDepartments());
+        return "users/tickets";
+    }
+
     public String userTickets(@AuthenticationPrincipal User user,
                                @RequestParam(defaultValue = "0") int page,
                                @RequestParam(defaultValue = "10") int size,
@@ -287,6 +333,7 @@ public class ViewController {
         }
         model.addAttribute("ticket", requestService.getRequestById(id));
         model.addAttribute("ticketEntity", entity);
+        model.addAttribute("user", user);
         model.addAttribute(USER_ATTR, user);
         return "requests/detail";
     }

@@ -24,6 +24,12 @@ public class SlaPolicyViewController {
     private final SlaPolicyService slaPolicyService;
 
     @GetMapping
+    public String list(Model model,
+                       @RequestParam(defaultValue = "0") int page,
+                       @RequestParam(defaultValue = "20") int size) {
+        model.addAttribute("policies", slaPolicyService.getAll(PageRequest.of(page, size)));
+        model.addAttribute("categories", RequestCategory.values());
+        model.addAttribute("priorities", Priority.values());
     public String list(@AuthenticationPrincipal User user,
                        Model model,
                        @RequestParam(defaultValue = "0") int page,

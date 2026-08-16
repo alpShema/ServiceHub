@@ -27,6 +27,30 @@ public class ServiceRequestViewController {
     @PostMapping("/submit")
     @PreAuthorize("hasRole('USER')")
     public String submitRequest(
+            @RequestParam String title,
+            @RequestParam(required = false) String description,
+            @RequestParam Long departmentId,
+            @RequestParam(defaultValue = "MEDIUM") String priority,
+            @AuthenticationPrincipal User user,
+            RedirectAttributes redirectAttributes,
+            Model model) {
+        try {
+            var dept = adminService.getDepartmentById(departmentId);
+            var dto = new ServiceRequestDto();
+            dto.setTitle(title);
+            dto.setDescription(description != null ? description : "");
+            dto.setCategory(dept.getCategory().name());
+            dto.setPriority(priority);
+            dto.setDepartmentId(departmentId);
+
+            requestService.createRequest(dto, user);
+            redirectAttributes.addFlashAttribute("success", "Request submitted successfully!");
+            return "redirect:/user/tickets";
+        } catch (RuntimeException ex) {
+            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+            return "redirect:/user/tickets#new";
+        }
+    }
             @ModelAttribute ServiceRequestDto dto,
             @AuthenticationPrincipal User user,
             RedirectAttributes redirectAttributes) {
